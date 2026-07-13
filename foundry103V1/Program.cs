@@ -9,9 +9,10 @@ class Program
 {
     static async Task Main()
     {
+        DotNetEnv.Env.TraversePath().Load();
         string endpoint = "https://ai-dev-103-foundry.services.ai.azure.com/openai/v1";
         string deploymentName = "gpt-5-mini";
-        string apiKey = Environment.GetEnvironmentVariable("AZURE_AI_API_KEY") ?? "<YOUR_API_KEY>";
+        string apiKey = Environment.GetEnvironmentVariable("AZURE_AI_API_KEY") ?? "";
 
         using var http = new HttpClient();
         http.Timeout = TimeSpan.FromMinutes(2);

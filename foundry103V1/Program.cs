@@ -1,83 +1,72 @@
-using System;
-using System.Net.Http;
 using System.Net.Http.Headers;
-using System.Text;
+using System.Net.Http.Json;
 using System.Text.Json;
-using System.Threading.Tasks;
 
-class Program
+DotNetEnv.Env.TraversePath().Load();
+
+const string endpoint = "https://ai-dev-103-foundry.services.ai.azure.com/openai/v1";
+const string deploymentName = "gpt-5-mini";
+
+string? apiKey = Environment.GetEnvironmentVariable("AZURE_AI_API_KEY");
+if (string.IsNullOrWhiteSpace(apiKey))
 {
-    static async Task Main()
+    Console.Error.WriteLine("Missing AZURE_AI_API_KEY. Set it in your environment or .env file.");
+    return 1;
+}
+
+using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(2) };
+http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+
+var request = new
+{
+    model = deploymentName,
+    instructions = "You are a helpful assistant.",
+    input = "Who are you?",
+    max_output_tokens = 1000,
+    tools = new[] { new { type = "web_search_preview" } },
+};
+
+Console.WriteLine("Sending request with web search tool...");
+using var response = await http.PostAsJsonAsync($"{endpoint}/responses", request);
+string responseText = await response.Content.ReadAsStringAsync();
+
+if (!response.IsSuccessStatusCode)
+{
+    Console.Error.WriteLine($"Error: {(int)response.StatusCode} {response.StatusCode}");
+    Console.Error.WriteLine(responseText);
+    return 1;
+}
+
+PrintResponse(responseText);
+return 0;
+
+// Parses the Responses API payload, printing web-search activity and the assistant's answer.
+static void PrintResponse(string responseText)
+{
+    using var doc = JsonDocument.Parse(responseText);
+
+    if (!doc.RootElement.TryGetProperty("output", out var output))
     {
-        DotNetEnv.Env.TraversePath().Load();
-        string endpoint = "https://ai-dev-103-foundry.services.ai.azure.com/openai/v1";
-        string deploymentName = "gpt-5-mini";
-        string apiKey = Environment.GetEnvironmentVariable("AZURE_AI_API_KEY") ?? "";
+        Console.WriteLine("Unexpected response:");
+        Console.WriteLine(responseText);
+        return;
+    }
 
-        using var http = new HttpClient();
-        http.Timeout = TimeSpan.FromMinutes(2);
-        http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-
-        var requestBody = new
+    foreach (var item in output.EnumerateArray())
+    {
+        switch (item.GetProperty("type").GetString())
         {
-            model = deploymentName,
-            instructions = "You are a helpful assistant.",
-            input = "Who are you?",
-            max_output_tokens = 1000,
-            tools = new[]
-            {
-                new { type = "web_search_preview" }
-            }
-        };
+            case "web_search_call":
+                Console.WriteLine("[Web search performed]");
+                break;
 
-        var json = JsonSerializer.Serialize(requestBody);
-        using var content = new StringContent(json, Encoding.UTF8, "application/json");
-
-        Console.WriteLine("Sending request with web search tool...");
-        var response = await http.PostAsync($"{endpoint}/responses", content);
-        var responseText = await response.Content.ReadAsStringAsync();
-
-        if (!response.IsSuccessStatusCode)
-        {
-            Console.WriteLine($"Error: {response.StatusCode}");
-            Console.WriteLine(responseText);
-            return;
-        }
-
-        // Parse the Responses API output
-        using var doc = JsonDocument.Parse(responseText);
-        var root = doc.RootElement;
-
-        if (root.TryGetProperty("output", out var output))
-        {
-            foreach (var item in output.EnumerateArray())
-            {
-                var type = item.GetProperty("type").GetString();
-
-                // Show web search results if present
-                if (type == "web_search_call")
+            case "message":
+                foreach (var part in item.GetProperty("content").EnumerateArray())
                 {
-                    Console.WriteLine("[Web search performed]");
+                    if (part.TryGetProperty("text", out var text))
+                        Console.WriteLine($"answer: {text.GetString()}");
                 }
-
-                // Show the assistant's message
-                if (type == "message")
-                {
-                    var contentArr = item.GetProperty("content");
-                    foreach (var part in contentArr.EnumerateArray())
-                    {
-                        if (part.TryGetProperty("text", out var text))
-                        {
-                            Console.WriteLine($"answer: {text.GetString()}");
-                        }
-                    }
-                }
-            }
-        }
-        else
-        {
-            Console.WriteLine("Unexpected response:");
-            Console.WriteLine(responseText);
+                break;
         }
     }
 }

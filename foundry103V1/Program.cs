@@ -1,6 +1,5 @@
-using System.Net.Http.Headers;
-using System.Net.Http.Json;
-using System.Text.Json;
+using System.ClientModel;
+using OpenAI.Responses;
 
 DotNetEnv.Env.TraversePath().Load();
 
@@ -14,59 +13,15 @@ if (string.IsNullOrWhiteSpace(apiKey))
     return 1;
 }
 
-using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(2) };
-http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+#pragma warning disable OPENAI001 // Responses API is experimental in OpenAI 2.12.0.
+var client = new ResponsesClient(
+    credential: new ApiKeyCredential(apiKey),
+    options: new ResponsesClientOptions { Endpoint = new Uri(endpoint) });
 
-var request = new
-{
-    model = deploymentName,
-    instructions = "You are a helpful assistant.",
-    input = "Who are you?",
-    max_output_tokens = 1000,
-    tools = new[] { new { type = "web_search_preview" } },
-};
+ClientResult<ResponseResult> response = await client.CreateResponseAsync(
+    model: deploymentName,
+    userInputText: "What are the three main benefits of using managed AI endpoints in the cloud?");
 
-Console.WriteLine("Sending request with web search tool...");
-using var response = await http.PostAsJsonAsync($"{endpoint}/responses", request);
-string responseText = await response.Content.ReadAsStringAsync();
-
-if (!response.IsSuccessStatusCode)
-{
-    Console.Error.WriteLine($"Error: {(int)response.StatusCode} {response.StatusCode}");
-    Console.Error.WriteLine(responseText);
-    return 1;
-}
-
-PrintResponse(responseText);
+Console.WriteLine($"answer: {response.Value.GetOutputText()}");
 return 0;
-
-// Parses the Responses API payload, printing web-search activity and the assistant's answer.
-static void PrintResponse(string responseText)
-{
-    using var doc = JsonDocument.Parse(responseText);
-
-    if (!doc.RootElement.TryGetProperty("output", out var output))
-    {
-        Console.WriteLine("Unexpected response:");
-        Console.WriteLine(responseText);
-        return;
-    }
-
-    foreach (var item in output.EnumerateArray())
-    {
-        switch (item.GetProperty("type").GetString())
-        {
-            case "web_search_call":
-                Console.WriteLine("[Web search performed]");
-                break;
-
-            case "message":
-                foreach (var part in item.GetProperty("content").EnumerateArray())
-                {
-                    if (part.TryGetProperty("text", out var text))
-                        Console.WriteLine($"answer: {text.GetString()}");
-                }
-                break;
-        }
-    }
-}
+#pragma warning restore OPENAI001

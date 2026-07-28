@@ -27,3 +27,4 @@ CreateResponseOptions options = new()
 ResponseResult response = client.CreateResponse(options);
 
 Console.WriteLine($"[ASSISTANT]: {response.GetOutputText()}");
+Console.ReadKey();

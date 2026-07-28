@@ -18,9 +18,15 @@ var client = new ResponsesClient(
     credential: new ApiKeyCredential(apiKey),
     options: new ResponsesClientOptions { Endpoint = new Uri(endpoint) });
 
-ClientResult<ResponseResult> response = await client.CreateResponseAsync(
+var options = new CreateResponseOptions(
     model: deploymentName,
-    userInputText: "What are the three main benefits of using managed AI endpoints in the cloud?");
+    inputItems: [ResponseItem.CreateUserMessageItem("What are the three main benefits of using managed AI endpoints in the cloud?")])
+{
+    Instructions = "You are a terse assistant for cloud engineers. Answer in at most two short bullet points, no preamble.",
+    MaxOutputTokenCount = 10000
+};
+
+ClientResult<ResponseResult> response = await client.CreateResponseAsync(options);
 
 Console.WriteLine($"answer: {response.Value.GetOutputText()}");
 return 0;

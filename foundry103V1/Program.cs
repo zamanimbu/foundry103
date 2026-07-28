@@ -18,9 +18,22 @@ var client = new ResponsesClient(
     credential: new ApiKeyCredential(apiKey),
     options: new ResponsesClientOptions { Endpoint = new Uri(endpoint) });
 
-ClientResult<ResponseResult> response = await client.CreateResponseAsync(
+const string imagePath = "./image.png"; // point this at a real image file
+byte[] imageBytes = await File.ReadAllBytesAsync(imagePath);
+BinaryData imageData = BinaryData.FromBytes(imageBytes, "image/png");
+
+var options = new CreateResponseOptions(
     model: deploymentName,
-    userInputText: "What are the three main benefits of using managed AI endpoints in the cloud?");
+    inputItems:
+    [
+        ResponseItem.CreateUserMessageItem(
+        [
+            ResponseContentPart.CreateInputTextPart("Explain what's in this image in detail."),
+            ResponseContentPart.CreateInputImagePart(imageData, ResponseImageDetailLevel.Auto),
+        ]),
+    ]);
+
+ClientResult<ResponseResult> response = await client.CreateResponseAsync(options);
 
 Console.WriteLine($"answer: {response.Value.GetOutputText()}");
 return 0;
